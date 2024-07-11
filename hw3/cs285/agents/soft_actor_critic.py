@@ -160,12 +160,15 @@ class SoftActorCritic(nn.Module):
             next_qs = next_qs[torch.randperm(self.num_critic_networks)]
 
         elif self.target_critic_backup_type == "min":
-            next_qs = next_qs.min(dim=0, keepdim=True).values  # (1, batch_size)
+            # next_qs : (num of critic networks, batch_size)
+            # num of critic networks 차원에서 가장 작은 값들을 각 batch 별로 선정
+            next_qs = next_qs.min(dim=0, keepdim=True)  # (1, batch_size)
             # expand q values to critics networks
+            # 값의 참조값 복사, memory efficient
             next_qs = next_qs.expand(self.num_critic_networks, batch_size)  # (num_critic_networks, batch_size)
 
         elif self.target_critic_backup_type == "mean":
-            next_qs = next_qs.mean(dim=0, keepdim=True).values
+            next_qs = next_qs.mean(dim=0, keepdim=True)
             next_qs = next_qs.expand(self.num_critic_networks, batch_size)
         else:
             # Default, we don't need to do anything.
@@ -202,11 +205,14 @@ class SoftActorCritic(nn.Module):
         with torch.no_grad():
             # TODO(student)
             # Sample from the actor
+            # (batch_size, obs_dim)
             next_action_distribution: torch.distributions.Distribution = self.actor(next_obs)
-            next_action = next_action_distribution.sample()
+            next_action = next_action_distribution.sample()  # output (batch_size, act_dim)
 
             # Compute the next Q-values for the sampled actions
-            next_qs = self.target_critic(next_obs, next_action)  # Q(s,a)
+            # next_obs : batch_size, obs_dim
+            # next_action : batch_size, actiom_dim
+            next_qs = self.target_critic(next_obs, next_action)  # Q(s,a)  -> (num critic networks, batch size)
 
             # Handle Q-values from multiple different target critic networks (if necessary)
             # (For double-Q, clip-Q, etc.)
@@ -261,9 +267,11 @@ class SoftActorCritic(nn.Module):
         action = action_distribution.rsample()
         # c : (batch_size, 1)
         # d : (batch_size, )
+        # log probability of p(x)
         log_probs = action_distribution.log_prob(action)
         if log_probs.dim() == 2:
             log_probs = log_probs.squeeze(dim=-1)  # (batch_size, 1) -> (batch_size, )
+        # -log(p)
         entropy = -log_probs.mean()
         return entropy
 
